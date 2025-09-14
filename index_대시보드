@@ -680,16 +680,12 @@
                 <!-- 필터 -->
                 <div class="filters">
                     <div class="filter-group">
-                        <label for="periodFilter">기간</label>
-                        <select id="periodFilter">
-                            <option value="all">전체</option>
-                            <option value="week">최근 1주일</option>
-                            <option value="month">최근 1개월</option>
-                            <option value="quarter">최근 3개월</option>
-                            <option value="year">올해</option>
-                            <option value="custom">커스텀</option>
-                        </select>
-                    </div>
+    <label for="periodFilter">기간</label>
+    <select id="periodFilter">
+        <option value="all">전체 시즌</option>
+        <option value="latest">최근 경기</option>
+    </select>
+</div>
                     
                     <div class="filter-group" id="customDateGroup" style="display: none;">
                         <label for="startDate">시작일</label>
@@ -777,7 +773,7 @@
                         </div>
                         <div class="term-item">
                             <span class="term-name">승점</span>
-                            <span class="term-desc">승리 3점, 무승부 1점, 패배 0점 기준</span>
+                            <span class="term-desc">승리 3점, 무승부 1점, 패배 0점</span>
                         </div>
                         <div class="term-item">
                             <span class="term-name">공격포인트</span>
@@ -1028,21 +1024,51 @@
                 });
             },
 
-            applyFilters() {
-                const playerName = document.getElementById('playerFilter').value.toLowerCase();
-                const position = document.getElementById('positionFilter').value;
-                
-                filteredData = playersData.filter(player => {
-                    const nameMatch = player.name.toLowerCase().includes(playerName);
-                    const positionMatch = position === 'all' || player.position === position;
-                    
-                    return nameMatch && positionMatch;
-                });
+            async applyFilters() {
+    const periodFilter = document.getElementById('periodFilter').value;
+    const playerName = document.getElementById('playerFilter').value.toLowerCase();
+    const position = document.getElementById('positionFilter').value;
+    
+    try {
+        if (periodFilter === 'all') {
+            // 전체 시즌 - 기존 방식
+            google.script.run
+                .withSuccessHandler((data) => {
+                    playersData = data;
+                    this.filterAndRender(playerName, position);
+                })
+                .withFailureHandler((error) => {
+                    console.error('데이터 로딩 실패:', error);
+                })
+                .getDashboardData();
+        } else if (periodFilter === 'latest') {
+            // 최근 경기
+            google.script.run
+                .withSuccessHandler((data) => {
+                    playersData = data;
+                    this.filterAndRender(playerName, position);
+                })
+                .withFailureHandler((error) => {
+                    console.error('데이터 로딩 실패:', error);
+                })
+                .getLatestGameData();
+        }
+    } catch (error) {
+        console.error('필터 적용 실패:', error);
+    }
+},
 
-                currentPage = 1;
-                this.renderTable();
-                this.renderPagination();
-            },
+filterAndRender(playerName, position) {
+    filteredData = playersData.filter(player => {
+        const nameMatch = player.name.toLowerCase().includes(playerName);
+        const positionMatch = position === 'all' || player.position === position;
+        return nameMatch && positionMatch;
+    });
+    
+    currentPage = 1;
+    this.renderTable();
+    this.renderPagination();
+},
 
             sortTable(column) {
                 const headers = document.querySelectorAll('th');
@@ -1052,7 +1078,7 @@
                     currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
                 } else {
                     currentSort.column = column;
-                    currentSort.direction = 'asc';
+                    currentSort.direction = 'desc';
                 }
 
                 filteredData.sort((a, b) => {
