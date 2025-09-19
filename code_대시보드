@@ -8,10 +8,10 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// 선수별능력치 시트에서 대시보드 데이터 가져오기
+
+// 현재 getDashboardData() 함수를 완전히 교체
 function getDashboardData() {
   try {
-    // openById 대신 getActiveSpreadsheet 사용
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const playersSheet = ss.getSheetByName('선수별능력치');
     
@@ -19,18 +19,12 @@ function getDashboardData() {
       throw new Error('선수별능력치 시트를 찾을 수 없습니다.');
     }
     
-    // 나머지 코드는 동일...
-    
-    // A:T 열까지 모든 데이터 가져오기 (20개 열)
     const range = playersSheet.getRange(2, 1, playersSheet.getLastRow() - 1, 20);
     const values = range.getValues();
     
     const players = values.map(row => ({
       name: row[0] || '',           // A열: 이름
       position: row[1] || '',       // B열: 포지션  
-      attack: row[2] || 0,          // C열: 공격
-      defense: row[3] || 0,         // D열: 수비
-      total: row[4] || 0,           // E열: 합산
       games: row[5] || 0,           // F열: 경기수
       wins: row[6] || 0,            // G열: 승
       draws: row[7] || 0,           // H열: 무
@@ -39,21 +33,80 @@ function getDashboardData() {
       assists: row[10] || 0,        // K열: 도움
       defenses: row[11] || 0,       // L열: 수비
       saves: row[12] || 0,          // M열: 선방
-      winRate: row[13] || 0,        // N열: 승률
+      winRate: row[13] || '0.00%',  // N열: 승률
       ccp: row[14] || 0,            // O열: CCP
       points: row[15] || 0,         // P열: 승점
       attackPoints: row[16] || 0,   // Q열: 공격포인트
       defensePoints: row[17] || 0,  // R열: 수비포인트
       mp: row[18] || 0,             // S열: MP
       mpPerGame: row[19] || 0,      // T열: MP/G
-      // 추가 계산 필드
       goalsPerGame: row[5] > 0 ? (row[9] / row[5]).toFixed(2) : '0.00',
       assistsPerGame: row[5] > 0 ? (row[10] / row[5]).toFixed(2) : '0.00'
-    })).filter(player => player.name); // 이름이 있는 선수만
+    })).filter(player => player.name);
     
     return players;
   } catch (error) {
     Logger.log('getDashboardData 오류: ' + error.toString());
+    throw error;
+  }
+}
+
+
+function getLatestGameData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const recordSheet = ss.getSheetByName('기록실_개인기록');
+    
+    if (!recordSheet) {
+      throw new Error('기록실_개인기록 시트를 찾을 수 없습니다.');
+    }
+    
+    const range = recordSheet.getRange(2, 1, recordSheet.getLastRow() - 1, 18);
+    const values = range.getValues();
+    
+    // null/빈 값 제거
+    const validRows = values.filter(row => row[0] && row[1]);
+    
+    if (validRows.length === 0) {
+      return [];
+    }
+    
+    // 모든 날짜 수집하고 최신 날짜 찾기
+    const allDates = validRows.map(row => new Date(row[0]));
+    const latestDate = new Date(Math.max(...allDates));
+    
+    // 최신 날짜 데이터만 필터링
+    const latestGameData = validRows.filter(row => {
+      const gameDate = new Date(row[0]);
+      return gameDate.getTime() === latestDate.getTime();
+    });
+    
+    // 기존 형태로 변환
+    const players = latestGameData.map(row => ({
+      name: row[1] || '',
+      position: row[17] || '미정',
+      games: row[2] || 0,
+      wins: row[3] || 0,
+      draws: row[4] || 0,
+      losses: row[5] || 0,
+      goals: row[6] || 0,
+      assists: row[7] || 0,
+      defenses: row[8] || 0,
+      saves: row[9] || 0,
+      winRate: row[10] || '0.00%',
+      ccp: row[11] || 0,
+      points: row[12] || 0,
+      attackPoints: row[13] || 0,
+      defensePoints: row[14] || 0,
+      mp: row[15] || 0,
+      mpPerGame: row[16] || 0,
+      goalsPerGame: row[2] > 0 ? (row[6] / row[2]).toFixed(2) : '0.00',
+      assistsPerGame: row[2] > 0 ? (row[7] / row[2]).toFixed(2) : '0.00'
+    }));
+    
+    return players;
+  } catch (error) {
+    Logger.log('getLatestGameData 오류: ' + error.toString());
     throw error;
   }
 }
@@ -232,3 +285,4 @@ function testData() {
   Logger.log(data);
   return data;
 }
+
