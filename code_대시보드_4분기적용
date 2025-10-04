@@ -1,0 +1,608 @@
+// ==========================================
+// CODE.GS - 풋살 통계 대시보드 서버 코드 (스프레드시트 연결형)
+// ==========================================
+// 설정 상수 추가
+const CONFIG = {
+  STATS_SHEET: "선수별능력치",
+  PLAYER_ARCHIVE_SHEET: "기록실_개인기록"
+};
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('JMFC Stats 2025')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+
+// 현재 getDashboardData() 함수를 완전히 교체
+function getDashboardData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const playersSheet = ss.getSheetByName('선수별능력치');
+    
+    if (!playersSheet) {
+      throw new Error('선수별능력치 시트를 찾을 수 없습니다.');
+    }
+    
+    const range = playersSheet.getRange(2, 1, playersSheet.getLastRow() - 1, 20);
+    const values = range.getValues();
+    
+    const players = values.map(row => ({
+      name: row[0] || '',           // A열: 이름
+      position: row[1] || '',       // B열: 포지션  
+      games: row[5] || 0,           // F열: 경기수
+      wins: row[6] || 0,            // G열: 승
+      draws: row[7] || 0,           // H열: 무
+      losses: row[8] || 0,          // I열: 패
+      goals: row[9] || 0,           // J열: 득점
+      assists: row[10] || 0,        // K열: 도움
+      defenses: row[11] || 0,       // L열: 수비
+      saves: row[12] || 0,          // M열: 선방
+      winRate: row[13] || '0.00%',  // N열: 승률
+      ccp: row[14] || 0,            // O열: CCP
+      points: row[15] || 0,         // P열: 승점
+      attackPoints: row[16] || 0,   // Q열: 공격포인트
+      defensePoints: row[17] || 0,  // R열: 수비포인트
+      mp: row[18] || 0,             // S열: MP
+      mpPerGame: row[19] || 0,      // T열: MP/G
+      goalsPerGame: row[5] > 0 ? (row[9] / row[5]).toFixed(2) : '0.00',
+      assistsPerGame: row[5] > 0 ? (row[10] / row[5]).toFixed(2) : '0.00'
+    })).filter(player => player.name);
+    
+    return players;
+  } catch (error) {
+    Logger.log('getDashboardData 오류: ' + error.toString());
+    throw error;
+  }
+}
+
+
+function getLatestGameData() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const recordSheet = ss.getSheetByName('기록실_개인기록');
+    
+    if (!recordSheet) {
+      throw new Error('기록실_개인기록 시트를 찾을 수 없습니다.');
+    }
+    
+    const range = recordSheet.getRange(2, 1, recordSheet.getLastRow() - 1, 18);
+    const values = range.getValues();
+    
+    // null/빈 값 제거
+    const validRows = values.filter(row => row[0] && row[1]);
+    
+    if (validRows.length === 0) {
+      return [];
+    }
+    
+    // 모든 날짜 수집하고 최신 날짜 찾기
+    const allDates = validRows.map(row => new Date(row[0]));
+    const latestDate = new Date(Math.max(...allDates));
+    
+    // 최신 날짜 데이터만 필터링
+    const latestGameData = validRows.filter(row => {
+      const gameDate = new Date(row[0]);
+      return gameDate.getTime() === latestDate.getTime();
+    });
+    
+    // 기존 형태로 변환
+    const players = latestGameData.map(row => ({
+      name: row[1] || '',
+      position: row[17] || '미정',
+      games: row[2] || 0,
+      wins: row[3] || 0,
+      draws: row[4] || 0,
+      losses: row[5] || 0,
+      goals: row[6] || 0,
+      assists: row[7] || 0,
+      defenses: row[8] || 0,
+      saves: row[9] || 0,
+      winRate: row[10] || '0.00%',
+      ccp: row[11] || 0,
+      points: row[12] || 0,
+      attackPoints: row[13] || 0,
+      defensePoints: row[14] || 0,
+      mp: row[15] || 0,
+      mpPerGame: row[16] || 0,
+      goalsPerGame: row[2] > 0 ? (row[6] / row[2]).toFixed(2) : '0.00',
+      assistsPerGame: row[2] > 0 ? (row[7] / row[2]).toFixed(2) : '0.00'
+    }));
+    
+    return players;
+  } catch (error) {
+    Logger.log('getLatestGameData 오류: ' + error.toString());
+    throw error;
+  }
+}
+
+
+function getSummaryStats() {
+  try {
+    // 현재 분기 자동 계산
+    const current = getCurrentQuarter();
+    
+    // 현재 분기 데이터 가져오기
+    const result = getQuarterlyData(current.year, current.quarter);
+    
+    if (!result.success || !result.data || result.data.length === 0) {
+      // 실패 시 전체 시즌 데이터로 폴백
+      return getSummaryStatsFromFullSeason();
+    }
+    
+    const players = result.data;
+    
+    // 총 경기수 계산 (현재 분기)
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const archiveSheet = ss.getSheetByName('기록실_개인기록');
+    
+    let totalMatches = 0;
+    if (archiveSheet && archiveSheet.getLastRow() >= 2) {
+      const range = getQuarterDateRange(current.year, current.quarter);
+      const startDate = new Date(range.start);
+      const endDate = new Date(range.end);
+      
+      const data = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 10).getValues();
+      const quarterData = data.filter(row => {
+        if (!row[0] || !row[1]) return false;
+        const recordDate = new Date(row[0]);
+        return recordDate >= startDate && recordDate <= endDate;
+      });
+      
+      totalMatches = Math.floor(quarterData.length / 2);
+    }
+    
+    // 총 득점 계산
+    let totalGoals = 0;
+    players.forEach(player => {
+      totalGoals += player.goals || 0;
+    });
+    
+    // MVP 계산 (CCP 기준, 동점자 최대 3명)
+    const sortedByCCP = [...players].sort((a, b) => b.ccp - a.ccp);
+    const maxCCP = sortedByCCP[0]?.ccp || 0;
+    const mvpList = sortedByCCP.filter(p => p.ccp === maxCCP).slice(0, 3);
+    const mvpName = mvpList.map(p => p.name).join(', ');
+    
+    return {
+      totalMatches: totalMatches,
+      totalPlayers: players.length,
+      totalGoals: totalGoals,
+      mvp: mvpName || '-'
+    };
+    
+  } catch (error) {
+    Logger.log('getSummaryStats 오류: ' + error.toString());
+    return getSummaryStatsFromFullSeason();
+  }
+}
+
+// 전체 시즌 통계 (폴백용)
+function getSummaryStatsFromFullSeason() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();ㅃ
+    const archiveSheet = ss.getSheetByName('기록실_개인기록');
+    
+    if (!archiveSheet) {
+      return { totalMatches: 0, totalPlayers: 0, totalGoals: 0, mvp: '-' };
+    }
+    
+    const data = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 10).getValues();
+    const players = getDashboardData();
+    
+    const totalMatches = Math.floor(data.filter(row => row[0] && row[1]).length / 2);
+    
+    let totalGoals = 0;
+    players.forEach(player => {
+      totalGoals += player.goals || 0;
+    });
+    
+    const sortedByCCP = [...players].sort((a, b) => b.ccp - a.ccp);
+    const maxCCP = sortedByCCP[0]?.ccp || 0;
+    const mvpList = sortedByCCP.filter(p => p.ccp === maxCCP).slice(0, 3);
+    const mvpName = mvpList.map(p => p.name).join(', ');
+    
+    return {
+      totalMatches: totalMatches,
+      totalPlayers: players.length,
+      totalGoals: totalGoals,
+      mvp: mvpName || '-'
+    };
+  } catch (error) {
+    Logger.log('getSummaryStatsFromFullSeason 오류: ' + error.toString());
+    return { totalMatches: 0, totalPlayers: 0, totalGoals: 0, mvp: '-' };
+  }
+}
+
+
+// 순위표 데이터 가져오기 (현재 분기 기준)
+function getLeaderboardsData() {
+  try {
+    // 현재 분기 자동 계산
+    const current = getCurrentQuarter();
+    
+    // 현재 분기 데이터로 순위표 생성
+    const result = getQuarterlyData(current.year, current.quarter);
+    
+    // safeExecute 결과 처리
+    if (!result.success) {
+      // 실패 시 전체 시즌 데이터로 폴백
+      const players = getDashboardData();
+      return generateLeaderboards(players);
+    }
+    
+    const players = result.data;
+    return generateLeaderboards(players);
+    
+  } catch (error) {
+    Logger.log('getLeaderboardsData 오류: ' + error.toString());
+    // 오류 시 전체 시즌 데이터로 폴백
+    const players = getDashboardData();
+    return generateLeaderboards(players);
+  }
+}
+
+// 순위표 생성 헬퍼 함수 (신규 추가)
+function generateLeaderboards(players) {
+  return {
+    goals: [...players].sort((a, b) => b.goals - a.goals).slice(0, 10),
+    assists: [...players].sort((a, b) => b.assists - a.assists).slice(0, 10),
+    attack: [...players].sort((a, b) => b.attackPoints - a.attackPoints).slice(0, 10),
+    defenses: [...players].sort((a, b) => b.defenses - a.defenses).slice(0, 10),
+    saves: [...players].sort((a, b) => b.saves - a.saves).slice(0, 10),
+    defensePoints: [...players].sort((a, b) => b.defensePoints - a.defensePoints).slice(0, 10),
+    ccp: [...players].sort((a, b) => b.ccp - a.ccp).slice(0, 10),
+    winrate: [...players].filter(p => p.games >= 5).sort((a, b) => b.winRate - a.winRate).slice(0, 10),
+    points: [...players].sort((a, b) => b.points - a.points).slice(0, 10)
+  };
+}
+
+
+// 날짜 기반 분기 계산 함수 (Code.gs 끝부분에 추가)
+function getQuarterFromDate(dateString) {
+  const date = new Date(dateString);
+  const month = date.getMonth() + 1; // 1-12
+  
+  if (month >= 1 && month <= 3) return 'Q1';
+  if (month >= 4 && month <= 6) return 'Q2';
+  if (month >= 7 && month <= 9) return 'Q3';
+  if (month >= 10 && month <= 12) return 'Q4';
+}
+
+// 분기별 CCP 데이터 가져오기 (기존 getCCPByQuarter 함수 교체)
+function getCCPByQuarter(quarter) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const archiveSheet = ss.getSheetByName('기록실_개인기록');
+    
+    if (!archiveSheet) {
+      return { error: '기록실_개인기록 시트를 찾을 수 없습니다.' };
+    }
+    
+    const data = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 10).getValues();
+    const currentYear = new Date().getFullYear();
+    
+    // 해당 분기 데이터만 필터링
+    const quarterData = data.filter(row => {
+      if (!row[0]) return false; // 날짜가 없으면 제외
+      
+      const date = new Date(row[0]);
+      if (date.getFullYear() !== currentYear) return false;
+      
+      return getQuarterFromDate(row[0]) === quarter;
+    });
+    
+    if (quarterData.length === 0) {
+      return []; // 빈 배열 반환
+    }
+    
+    // 선수별 CCP 계산 및 정렬
+    const playerStats = {};
+    quarterData.forEach(row => {
+      const playerName = row[1]; // B열: 선수명
+      if (!playerStats[playerName]) {
+        playerStats[playerName] = { goals: 0, assists: 0, defenses: 0, saves: 0, wins: 0, draws: 0 };
+      }
+      
+      playerStats[playerName].goals += row[3] || 0;    // D열: 득점
+      playerStats[playerName].assists += row[4] || 0;  // E열: 도움
+      playerStats[playerName].defenses += row[5] || 0; // F열: 수비
+      playerStats[playerName].saves += row[6] || 0;    // G열: 선방
+      
+      // 승무패 계산 (H열: 결과)
+      const result = row[7];
+      if (result === '승') playerStats[playerName].wins++;
+      else if (result === '무') playerStats[playerName].draws++;
+    });
+    
+    // CCP 계산 및 정렬
+    const ccpRanking = Object.keys(playerStats).map(name => {
+      const stats = playerStats[name];
+      const points = stats.wins * 3 + stats.draws * 1;
+      const mp = (stats.goals + stats.assists) * 2 + (stats.defenses + stats.saves) * 1;
+      const ccp = points + mp;
+      
+      return { name, ccp };
+    }).sort((a, b) => b.ccp - a.ccp).slice(0, 10);
+    
+    return ccpRanking;
+  } catch (error) {
+    Logger.log('getCCPByQuarter 오류: ' + error.toString());
+    return { error: error.toString() };
+  }
+}
+
+// 선수 이름 목록 가져오기
+function getPlayerNames() {
+  try {
+    const players = getDashboardData();
+    return players.map(player => player.name);
+  } catch (error) {
+    Logger.log('getPlayerNames 오류: ' + error.toString());
+    return [];
+  }
+}
+
+// 선수 비교 데이터 가져오기
+function comparePlayersData(player1, player2, player3) {
+  try {
+    const players = getDashboardData();
+    const selectedPlayers = [player1, player2, player3].filter(name => name);
+    
+    const results = selectedPlayers.map(name => {
+      const player = players.find(p => p.name === name);
+      return player || { name: name, error: '선수를 찾을 수 없습니다' };
+    });
+    
+    return results;
+  } catch (error) {
+    Logger.log('comparePlayersData 오류: ' + error.toString());
+    return { error: error.toString() };
+  }
+}
+
+function testData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('선수별능력치');
+  const data = sheet.getRange('A2:T10').getValues();
+  Logger.log(data);
+  return data;
+}
+
+// ===== 기존 코드 끝부분 after getPlayerNames() =====
+
+// [신규] 분기 계산 유틸리티 함수들
+function getCurrentQuarter() {
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1~12
+    
+    let quarter;
+    if (month >= 1 && month <= 3) quarter = 1;
+    else if (month >= 4 && month <= 6) quarter = 2;
+    else if (month >= 7 && month <= 9) quarter = 3;
+    else quarter = 4;
+    
+    return { year: year, quarter: quarter };
+  } catch (e) {
+    Logger.log('getCurrentQuarter 오류: ' + e.toString());
+    return { year: 2025, quarter: 4 }; // 안전 기본값
+  }
+}
+
+function getQuarterDateRange(year, quarter) {
+  const ranges = {
+    1: { start: `${year}-01-01`, end: `${year}-03-31` },
+    2: { start: `${year}-04-01`, end: `${year}-06-30` },
+    3: { start: `${year}-07-01`, end: `${year}-09-30` },
+    4: { start: `${year}-10-01`, end: `${year}-12-31` }
+  };
+  return ranges[quarter] || ranges[4];
+}
+
+// [신규] 사용 가능한 분기 목록 가져오기
+function getAvailableQuarters() {
+  return safeExecute(() => {
+    // 1단계: 안전한 기본값
+    const baseOptions = [
+      { value: 'all', label: '전체 시즌' },
+      { value: 'latest', label: '최근 경기' }
+    ];
+    
+    // 2단계: 현재 분기 강제 추가
+    const current = getCurrentQuarter();
+    const currentOption = {
+      value: `${current.year}-Q${current.quarter}`,
+      label: `${current.year}년 ${current.quarter}분기`,
+      isCurrent: true
+    };
+    
+    // 3단계: 과거 데이터 스캔 (실패해도 무방)
+    const pastQuarters = [];
+    try {
+      const sheet = getSheet(CONFIG.PLAYER_ARCHIVE_SHEET);
+      if (sheet && sheet.getLastRow() >= 2) {
+        const dates = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
+        const quarterSet = new Set();
+        
+        dates.forEach(row => {
+          try {
+            const dateVal = row[0];
+            if (!dateVal) return;
+            
+            const date = new Date(dateVal);
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            
+            // 유효성 검증
+            if (year < 2020 || year > 2030) return;
+            if (month < 1 || month > 12) return;
+            
+            let quarter;
+            if (month >= 1 && month <= 3) quarter = 1;
+            else if (month >= 4 && month <= 6) quarter = 2;
+            else if (month >= 7 && month <= 9) quarter = 3;
+            else quarter = 4;
+            
+            const key = `${year}-Q${quarter}`;
+            
+            // 현재 분기가 아닌 과거 분기만 추가
+            if (key !== currentOption.value) {
+              quarterSet.add(JSON.stringify({ year, quarter }));
+            }
+          } catch (e) {
+            // 개별 날짜 오류는 무시
+          }
+        });
+        
+        // Set을 배열로 변환 후 정렬
+        Array.from(quarterSet).forEach(item => {
+          const { year, quarter } = JSON.parse(item);
+          pastQuarters.push({
+            value: `${year}-Q${quarter}`,
+            label: `${year}년 ${quarter}분기`,
+            year: year,
+            quarter: quarter
+          });
+        });
+        
+        // 최신순 정렬
+        pastQuarters.sort((a, b) => {
+          if (a.year !== b.year) return b.year - a.year;
+          return b.quarter - a.quarter;
+        });
+      }
+    } catch (e) {
+      Logger.log('과거 분기 스캔 오류 (무시): ' + e.toString());
+    }
+    
+    // 최종 조합: 기본 옵션 + 과거 분기 + 현재 분기
+    return [...baseOptions, ...pastQuarters, currentOption];
+  });
+}
+
+// [신규] 분기별 데이터 가져오기
+function getQuarterlyData(year, quarter) {
+  return safeExecute(() => {
+    try {
+      const sheet = getSheet(CONFIG.PLAYER_ARCHIVE_SHEET);
+      if (!sheet || sheet.getLastRow() < 2) {
+        return [];
+      }
+      
+      const range = getQuarterDateRange(year, quarter);
+      const startDate = new Date(range.start);
+      const endDate = new Date(range.end);
+      
+      const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
+      const playerStats = {};
+      
+      data.forEach(row => {
+        try {
+          const dateVal = row[0];
+          if (!dateVal) return;
+          
+          const recordDate = new Date(dateVal);
+          
+          // 날짜 범위 체크
+          if (recordDate < startDate || recordDate > endDate) return;
+          
+          const playerName = row[1];
+          if (!playerName) return;
+          
+          if (!playerStats[playerName]) {
+            playerStats[playerName] = {
+              name: playerName,
+              games: 0,
+              wins: 0,
+              draws: 0,
+              losses: 0,
+              goals: 0,
+              assists: 0,
+              defenses: 0,
+              saves: 0
+            };
+          }
+          
+          playerStats[playerName].games += Number(row[2]) || 0;
+          playerStats[playerName].wins += Number(row[3]) || 0;
+          playerStats[playerName].draws += Number(row[4]) || 0;
+          playerStats[playerName].losses += Number(row[5]) || 0;
+          playerStats[playerName].goals += Number(row[6]) || 0;
+          playerStats[playerName].assists += Number(row[7]) || 0;
+          playerStats[playerName].defenses += Number(row[8]) || 0;
+          playerStats[playerName].saves += Number(row[9]) || 0;
+        } catch (e) {
+          // 개별 행 오류 무시
+        }
+      });
+      
+      // 선수별능력치 시트에서 포지션 정보 가져오기
+      const statsSheet = getSheet(CONFIG.STATS_SHEET);
+      const positionMap = {};
+      if (statsSheet && statsSheet.getLastRow() >= 2) {
+        const posData = statsSheet.getRange(2, 1, statsSheet.getLastRow() - 1, 2).getValues();
+        posData.forEach(row => {
+          if (row[0]) positionMap[row[0]] = row[1] || '미정';
+        });
+      }
+      
+      // 계산된 스탯 추가
+      const result = Object.values(playerStats).map(p => {
+        const attackPoints = p.goals + p.assists;
+        const defensePoints = p.defenses + p.saves;
+        const mp = (p.goals + p.assists) * 2 + (p.defenses + p.saves) * 1;
+        const points = p.wins * 3 + p.draws * 1;
+        const ccp = points + mp;
+        const winRate = p.games > 0 ? (p.wins / p.games) : 0;
+        
+        return {
+          name: p.name,
+          position: positionMap[p.name] || '미정',
+          games: p.games,
+          wins: p.wins,
+          draws: p.draws,
+          losses: p.losses,
+          goals: p.goals,
+          assists: p.assists,
+          defenses: p.defenses,
+          saves: p.saves,
+          winRate: winRate,
+          ccp: ccp,
+          points: points,
+          attackPoints: attackPoints,
+          defensePoints: defensePoints,
+          mp: mp,
+          mpPerGame: p.games > 0 ? (mp / p.games) : 0,
+          goalsPerGame: p.games > 0 ? (p.goals / p.games) : 0,
+          assistsPerGame: p.games > 0 ? (p.assists / p.games) : 0
+        };
+      }).filter(p => p.games > 0); // 경기수 0인 선수 제외
+      
+      return result;
+    } catch (e) {
+      Logger.log('getQuarterlyData 오류: ' + e.toString());
+      throw new Error('분기별 데이터를 불러올 수 없습니다. 전체 시즌 데이터를 확인해주세요.');
+    }
+  });
+}
+
+
+function getSheet(sheetName) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(sheetName);
+}
+
+// safeExecute 함수도 추가
+function safeExecute(func) {
+  try {
+    const result = func();
+    return { success: true, data: result };
+  } catch (e) {
+    Logger.log('safeExecute 오류: ' + e.toString());
+    return { success: false, message: e.toString() };
+  }
+}
+
+
