@@ -176,7 +176,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 22px;
+            font-size: 23px;
             min-width: 1200px; /* 최소 너비 설정 */
         }
 
@@ -222,6 +222,7 @@
             min-width: 90px;
             border-bottom: 1px solid #dee2e6;
             white-space: nowrap;
+            text-align: center; /* 이 줄 추가 */
         }
 
         td:first-child {
@@ -231,6 +232,7 @@
             z-index: 5;
             font-weight: 600;
             min-width: 120px;
+            text-align: left; /* 이 줄 추가 */
         }
 
         tr:nth-child(even) {
@@ -908,7 +910,7 @@
         let filteredData = [];
         let currentSort = { column: '', direction: 'asc' };
         let currentPage = 1;
-        const itemsPerPage = 15;
+        const itemsPerPage = 12;
 
         // 탭 전환
         function switchTab(tabName) {
