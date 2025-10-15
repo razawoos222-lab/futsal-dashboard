@@ -151,25 +151,37 @@ function getSummaryStats() {
     
     const players = result.data;
     
-    // 총 경기수 계산 (현재 분기)
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const archiveSheet = ss.getSheetByName('기록실_개인기록');
+ // 총 경기수 계산 (현재 분기)
+const ss = SpreadsheetApp.getActiveSpreadsheet();
+const archiveSheet = ss.getSheetByName('기록실_개인기록');
+
+let totalMatches = 0;
+if (archiveSheet && archiveSheet.getLastRow() >= 2) {
+  const range = getQuarterDateRange(current.year, current.quarter);
+  const startDate = new Date(range.start);
+  const endDate = new Date(range.end);
+  
+  const data = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 10).getValues();
+  const quarterData = data.filter(row => {
+    if (!row[0] || !row[1]) return false;
+    const recordDate = new Date(row[0]);
+    return recordDate >= startDate && recordDate <= endDate;
+  });
+  
+  // ✅ 날짜별 최대 경기수를 합산
+  const matchesByDate = {};
+  quarterData.forEach(row => {
+    const dateStr = Utilities.formatDate(new Date(row[0]), ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+    const gamesPlayed = row[2] || 0;
     
-    let totalMatches = 0;
-    if (archiveSheet && archiveSheet.getLastRow() >= 2) {
-      const range = getQuarterDateRange(current.year, current.quarter);
-      const startDate = new Date(range.start);
-      const endDate = new Date(range.end);
-      
-      const data = archiveSheet.getRange(2, 1, archiveSheet.getLastRow() - 1, 10).getValues();
-      const quarterData = data.filter(row => {
-        if (!row[0] || !row[1]) return false;
-        const recordDate = new Date(row[0]);
-        return recordDate >= startDate && recordDate <= endDate;
-      });
-      
-      totalMatches = Math.floor(quarterData.length / 2);
+    if (!matchesByDate[dateStr]) {
+      matchesByDate[dateStr] = 0;
     }
+    matchesByDate[dateStr] = Math.max(matchesByDate[dateStr], gamesPlayed);
+  });
+  
+  totalMatches = Object.values(matchesByDate).reduce((sum, max) => sum + max, 0);
+}
     
     // 총 득점 계산
     let totalGoals = 0;
@@ -625,5 +637,3 @@ function safeExecute(func) {
     return { success: false, message: e.toString() };
   }
 }
-
-
