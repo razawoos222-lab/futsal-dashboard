@@ -799,25 +799,7 @@
 
             <!-- 순위표 탭 -->
             <div id="leaderboards" class="tab-content">
-    <!-- 요약 카드 -->
-    <div class="summary-cards">
-        <div class="summary-card">
-            <div class="card-title">총 경기수</div>
-            <div class="card-value" id="totalMatches">-</div>
-        </div>
-        <div class="summary-card">
-            <div class="card-title">등록 선수</div>
-            <div class="card-value" id="totalPlayers">-</div>
-        </div>
-        <div class="summary-card">
-            <div class="card-title">총 득점</div>
-            <div class="card-value" id="totalGoals">-</div>
-        </div>
-        <div class="summary-card">
-            <div class="card-title">시즌 MVP</div>
-            <div class="card-value" id="currentMVP">-</div>
-        </div>
-    </div>
+
 
     <!-- 순위표 그리드 -->
     <div class="leaderboards-grid">
@@ -1265,22 +1247,7 @@ filterAndRender(playerName, position) {
     
     async loadData() {
         try {
-            // 요약 통계 로드
-            google.script.run
-                .withSuccessHandler((data) => {
-                    this.renderSummaryCards(data);
-                })
-                .withFailureHandler((error) => {
-                    console.error('요약 통계 로딩 실패:', error);
-                    this.renderSummaryCards({
-                        totalMatches: 156,
-                        totalPlayers: 18,
-                        totalGoals: 324,
-                        mvp: '김기호'
-                    });
-                })
-                .getSummaryStats();
-
+        
             // 순위표 데이터 로드
             google.script.run
                 .withSuccessHandler((data) => {
