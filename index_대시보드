@@ -921,19 +921,36 @@
         }
 
         function generateFallbackOptions() {
-            const now = new Date();
-            const currentYear = now.getFullYear();
-            const years = [currentYear - 1, currentYear, currentYear + 1];
+            const currentYear = new Date().getFullYear();
             const options = [{ value: 'all', label: '전체기간' }];
 
-            years.forEach((year) => {
-                for (let quarter = 1; quarter <= 4; quarter += 1) {
-                    options.push({
-                        value: `${year}-Q${quarter}`,
-                        label: `${year}년 ${quarter}분기`
-                    });
+            // 2025년은 예외적으로 3분기부터 노출
+            for (let quarter = 3; quarter <= 4; quarter += 1) {
+                options.push({
+                    value: `2025-Q${quarter}`,
+                    label: `2025년 ${quarter}분기`
+                });
+            }
+
+            // 2026년 기본 분기 전체 노출
+            for (let quarter = 1; quarter <= 4; quarter += 1) {
+                options.push({
+                    value: `2026-Q${quarter}`,
+                    label: `2026년 ${quarter}분기`
+                });
+            }
+
+            // 이후 연도는 현재 연도까지 자동 확장
+            if (currentYear >= 2027) {
+                for (let year = 2027; year <= currentYear; year += 1) {
+                    for (let quarter = 1; quarter <= 4; quarter += 1) {
+                        options.push({
+                            value: `${year}-Q${quarter}`,
+                            label: `${year}년 ${quarter}분기`
+                        });
+                    }
                 }
-            });
+            }
 
             return options;
         }
