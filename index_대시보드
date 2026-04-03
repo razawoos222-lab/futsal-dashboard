@@ -813,6 +813,10 @@
             <label for="leaderboardsPeriodFilter">기간</label>
             <select id="leaderboardsPeriodFilter"></select>
         </div>
+        <div class="filter-group">
+            <label>&nbsp;</label>
+            <button onclick="Leaderboards.applyFilters()">필터 적용</button>
+        </div>
     </div>
 
     <!-- 순위표 그리드 -->
@@ -1043,7 +1047,6 @@
                 const periodFilter = document.getElementById('periodFilter');
                 periodFilter.addEventListener('change', () => {
                     this.onPeriodChange(periodFilter.value);
-                    // 단일 기간 드롭다운 구조: 별도 날짜 입력 비활성 유지
                     const customGroups = document.querySelectorAll('#customDateGroup, #customDateGroup2');
                     customGroups.forEach(group => group.style.display = 'none');
                 });
@@ -1062,7 +1065,6 @@
             onPeriodChange(periodValue) {
                 currentPeriod = periodValue;
                 this.syncPeriodFilters(periodValue);
-                this.applyFilters();
             },
 
             syncPeriodFilters(periodValue) {
@@ -1072,61 +1074,32 @@
                 if (leaderboardsPeriodFilter) leaderboardsPeriodFilter.value = periodValue;
             },
 
-                async applyFilters() {
-        const periodFilter = document.getElementById('periodFilter').value;
+                async applyFilters(periodValue) {
+        const selectedPeriod = periodValue || currentPeriod || document.getElementById('periodFilter').value || 'all';
         const playerName = document.getElementById('playerFilter').value.toLowerCase();
         const position = document.getElementById('positionFilter').value;
-        
+
+        currentPeriod = selectedPeriod;
+        this.syncPeriodFilters(selectedPeriod);
+
         try {
-            if (periodFilter === 'all') {
-                // 전체기간
-                google.script.run
-                    .withSuccessHandler((data) => {
-                        playersData = data;
-                        this.filterAndRender(playerName, position);
-                        Leaderboards.loadData(periodFilter);
-                    })
-                    .withFailureHandler((error) => {
-                        console.error('데이터 로딩 실패:', error);
-                        alert('데이터 로딩에 실패했습니다. 다시 시도해주세요.');
-                    })
-                    .getDashboardData();
-            } else if (periodFilter.includes('-Q')) {
-                // 분기별 조회 (예: "2025-Q4")
-                const [year, quarterStr] = periodFilter.split('-Q');
-                const quarter = parseInt(quarterStr);
-                
-                google.script.run
-                    .withSuccessHandler((response) => {
-                        if (response.success) {
-                            playersData = response.data;
-                            this.filterAndRender(playerName, position);
-                            Leaderboards.loadData(periodFilter);
-                        } else {
-                            alert(response.message || '분기별 데이터를 불러올 수 없습니다.');
-                            // 실패 시 전체기간으로 폴백
-                            document.getElementById('periodFilter').value = 'all';
-                            currentPeriod = 'all';
-                            this.syncPeriodFilters('all');
-                            this.applyFilters();
-                        }
-                    })
-                    .withFailureHandler((error) => {
-                        console.error('분기 데이터 로딩 실패:', error);
-                        alert('데이터 로딩에 실패했습니다. 전체기간 데이터로 전환합니다.');
-                        // 실패 시 전체기간으로 폴백
-                        document.getElementById('periodFilter').value = 'all';
-                        currentPeriod = 'all';
-                        this.syncPeriodFilters('all');
-                        this.applyFilters();
-                    })
-                    .getQuarterlyData(parseInt(year), quarter);
-            }
+            google.script.run
+                .withSuccessHandler((data) => {
+                    playersData = Array.isArray(data) ? data : [];
+                    this.filterAndRender(playerName, position);
+                    Leaderboards.loadData(selectedPeriod);
+                })
+                .withFailureHandler((error) => {
+                    console.error('데이터 로딩 실패:', error);
+                    alert('데이터 로딩에 실패했습니다. 다시 시도해주세요.');
+                })
+                .getDashboardData(selectedPeriod);
         } catch (error) {
             console.error('필터 적용 실패:', error);
             alert('오류가 발생했습니다. 페이지를 새로고침해주세요.');
         }
     },
+
 
 
 async loadPeriodOptions() {
@@ -1313,6 +1286,11 @@ const Leaderboards = {
     init() {
         this.loadData(currentPeriod);
     },
+
+    applyFilters() {
+        const selectedPeriod = document.getElementById('leaderboardsPeriodFilter')?.value || currentPeriod || 'all';
+        Dashboard.applyFilters(selectedPeriod);
+    },
     
     async loadData(periodValue = 'all') {
         try {
@@ -1352,6 +1330,11 @@ const Leaderboards = {
     renderLeaderCategory(category, leaders) {
         const container = document.getElementById(`${category}-leaders`);
         if (!container) return;
+
+        if (!leaders.length) {
+            container.innerHTML = '<div class="leader-item"><div class="leader-info"><div class="leader-name">데이터 없음</div></div><div class="leader-stat">-</div></div>';
+            return;
+        }
 
         container.innerHTML = leaders.map((leader, index) => {
             const rankClass = index === 0 ? 'first' : index === 1 ? 'second' : index === 2 ? 'third' : '';

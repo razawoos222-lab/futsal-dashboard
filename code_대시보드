@@ -15,30 +15,42 @@ function doGet() {
 }
 
 
-function getDashboardData() {
+function getDashboardData(periodValue) {
   try {
+    const selectedPeriod = periodValue || 'all';
+
+    if (selectedPeriod !== 'all' && selectedPeriod.includes('-Q')) {
+      const [year, quarterStr] = selectedPeriod.split('-Q');
+      const quarter = parseInt(quarterStr, 10);
+      const quarterResult = getQuarterlyData(parseInt(year, 10), quarter);
+
+      if (quarterResult.success) {
+        return quarterResult.data || [];
+      }
+
+      Logger.log('getDashboardData 분기 조회 실패, 전체기간으로 폴백: ' + quarterResult.message);
+    }
+
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const playersSheet = ss.getSheetByName('선수별능력치');
-    
+
     if (!playersSheet) {
       throw new Error('선수별능력치 시트를 찾을 수 없습니다.');
     }
-    
+
     const range = playersSheet.getRange(2, 1, playersSheet.getLastRow() - 1, 20);
     const values = range.getValues();
-    
+
     const players = values.map(row => {
       const games = row[5] || 0;   // F열: 경기수
       const wins = row[6] || 0;    // G열: 승
       const draws = row[7] || 0;   // H열: 무
       const losses = row[8] || 0;  // I열: 패
-      
-      // ★ 핵심 수정: 승률을 직접 계산 (N열 무시)
-      // 승률 = 승 ÷ (승+패) × 100 → 백분율로 계산
-      const winRate = (wins + losses) > 0 
-      ? (wins / (wins + losses)) 
+
+      const winRate = (wins + losses) > 0
+      ? (wins / (wins + losses))
       : 0;
-      
+
       return {
         name: row[0] || '',
         position: row[1] || '',
@@ -50,7 +62,7 @@ function getDashboardData() {
         assists: row[10] || 0,
         defenses: row[11] || 0,
         saves: row[12] || 0,
-        winRate: winRate, // "33.82" 형태 (문자열)
+        winRate: winRate,
         ccp: row[14] || 0,
         points: row[15] || 0,
         attackPoints: row[16] || 0,
@@ -61,7 +73,7 @@ function getDashboardData() {
         assistsPerGame: games > 0 ? (row[10] / games).toFixed(2) : '0.00'
       };
     }).filter(player => player.name);
-    
+
     return players;
   } catch (error) {
     Logger.log('getDashboardData 오류: ' + error.toString());
@@ -140,7 +152,7 @@ function getLatestGameData() {
 // 전체기간 통계 (폴백용)
 function getSummaryStatsFromFullSeason() {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();ㅃ
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
     const archiveSheet = ss.getSheetByName('기록실_개인기록');
     
     if (!archiveSheet) {
@@ -178,38 +190,13 @@ function getSummaryStatsFromFullSeason() {
 // 순위표 데이터 가져오기 (선택 기간 기준)
 function getLeaderboardsData(periodValue) {
   try {
-    // 기본값: 전체기간
     const selectedPeriod = periodValue || 'all';
-
-    if (selectedPeriod === 'all') {
-      const players = getDashboardData();
-      return generateLeaderboards(players);
-    }
-
-    // 분기별 조회 (예: "2025-Q3")
-    if (selectedPeriod.includes('-Q')) {
-      const [year, quarterStr] = selectedPeriod.split('-Q');
-      const quarter = parseInt(quarterStr, 10);
-      const result = getQuarterlyData(parseInt(year, 10), quarter);
-
-      if (!result.success) {
-        // 실패 시 전체기간 데이터로 폴백
-        const players = getDashboardData();
-        return generateLeaderboards(players);
-      }
-
-      return generateLeaderboards(result.data || []);
-    }
-
-    // 알 수 없는 값이면 전체기간으로 폴백
-    const players = getDashboardData();
-    return generateLeaderboards(players);
-    
+    const players = getDashboardData(selectedPeriod);
+    return generateLeaderboards(players || []);
   } catch (error) {
     Logger.log('getLeaderboardsData 오류: ' + error.toString());
-    // 오류 시 전체기간 데이터로 폴백
-    const players = getDashboardData();
-    return generateLeaderboards(players);
+    const players = getDashboardData('all');
+    return generateLeaderboards(players || []);
   }
 }
 
@@ -403,6 +390,7 @@ function getQuarterlyData(year, quarter) {
       const range = getQuarterDateRange(year, quarter);
       const startDate = new Date(range.start);
       const endDate = new Date(range.end);
+      endDate.setHours(23, 59, 59, 999);
       
       const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 10).getValues();
       const playerStats = {};
