@@ -667,7 +667,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>JMFC Stats</h1>
+        <h1 id="dashboardTitle">JMFC Stats</h1>
 
         <!-- 탭 네비게이션 -->
         <div class="tabs">
@@ -684,8 +684,7 @@
                     <div class="filter-group">
     <label for="periodFilter">기간</label>
     <select id="periodFilter">
-        <option value="all">전체 시즌</option>
-        <option value="latest">최근 경기</option>
+        <option value="all">전체기간</option>
         <!-- 분기 옵션은 동적으로 로드됨 -->
     </select>
 </div>         
@@ -922,10 +921,18 @@
         // 대시보드 모듈
             const Dashboard = {
             init() {
+            this.setTitleByCurrentYear();
             this.loadData();
             this.setupFilters();
             this.loadPeriodOptions(); // 신규 추가
            },
+
+            setTitleByCurrentYear() {
+                const title = document.getElementById('dashboardTitle');
+                if (!title) return;
+                const year = new Date().getFullYear();
+                title.textContent = `JMFC Stats ${year}`;
+            },
 
             async loadData() {
     try {
@@ -995,12 +1002,9 @@
             setupFilters() {
                 const periodFilter = document.getElementById('periodFilter');
                 periodFilter.addEventListener('change', () => {
+                    // 단일 기간 드롭다운 구조: 별도 날짜 입력 비활성 유지
                     const customGroups = document.querySelectorAll('#customDateGroup, #customDateGroup2');
-                    if (periodFilter.value === 'custom') {
-                        customGroups.forEach(group => group.style.display = 'flex');
-                    } else {
-                        customGroups.forEach(group => group.style.display = 'none');
-                    }
+                    customGroups.forEach(group => group.style.display = 'none');
                 });
 
                 const playerFilter = document.getElementById('playerFilter');
@@ -1016,29 +1020,18 @@
         
         try {
             if (periodFilter === 'all') {
-                // 전체 시즌
+                // 전체기간
                 google.script.run
                     .withSuccessHandler((data) => {
                         playersData = data;
                         this.filterAndRender(playerName, position);
+                        Leaderboards.loadData(periodFilter);
                     })
                     .withFailureHandler((error) => {
                         console.error('데이터 로딩 실패:', error);
                         alert('데이터 로딩에 실패했습니다. 다시 시도해주세요.');
                     })
                     .getDashboardData();
-            } else if (periodFilter === 'latest') {
-                // 최근 경기
-                google.script.run
-                    .withSuccessHandler((data) => {
-                        playersData = data;
-                        this.filterAndRender(playerName, position);
-                    })
-                    .withFailureHandler((error) => {
-                        console.error('데이터 로딩 실패:', error);
-                        alert('데이터 로딩에 실패했습니다. 다시 시도해주세요.');
-                    })
-                    .getLatestGameData();
             } else if (periodFilter.includes('-Q')) {
                 // 분기별 조회 (예: "2025-Q4")
                 const [year, quarterStr] = periodFilter.split('-Q');
@@ -1049,17 +1042,18 @@
                         if (response.success) {
                             playersData = response.data;
                             this.filterAndRender(playerName, position);
+                            Leaderboards.loadData(periodFilter);
                         } else {
                             alert(response.message || '분기별 데이터를 불러올 수 없습니다.');
-                            // 실패 시 전체 시즌으로 폴백
+                            // 실패 시 전체기간으로 폴백
                             document.getElementById('periodFilter').value = 'all';
                             this.applyFilters();
                         }
                     })
                     .withFailureHandler((error) => {
                         console.error('분기 데이터 로딩 실패:', error);
-                        alert('데이터 로딩에 실패했습니다. 전체 시즌 데이터로 전환합니다.');
-                        // 실패 시 전체 시즌으로 폴백
+                        alert('데이터 로딩에 실패했습니다. 전체기간 데이터로 전환합니다.');
+                        // 실패 시 전체기간으로 폴백
                         document.getElementById('periodFilter').value = 'all';
                         this.applyFilters();
                     })
@@ -1081,20 +1075,20 @@ async loadPeriodOptions() {
                     if (!select) return;
                     
                     // 기존 옵션 제거 (기본 2개 제외)
-                    while (select.options.length > 2) {
-                        select.remove(2);
+                    while (select.options.length > 1) {
+                        select.remove(1);
                     }
                     
                     // 새 옵션 추가 (기본 옵션 제외하고)
-                    response.data.slice(2).forEach(opt => {
+                    response.data.slice(1).forEach(opt => {
                         const option = document.createElement('option');
                         option.value = opt.value;
                         option.textContent = opt.label;
-                        if (opt.isCurrent) {
-                            option.selected = true; // 현재 분기 자동 선택
-                        }
                         select.appendChild(option);
                     });
+
+                    // 기본값은 항상 전체기간
+                    select.value = 'all';
                 }
             })
             .withFailureHandler((error) => {
@@ -1240,12 +1234,12 @@ filterAndRender(playerName, position) {
             }
         };
 
-      const Leaderboards = {
+const Leaderboards = {
     init() {
-        this.loadData();
+        this.loadData('all');
     },
     
-    async loadData() {
+    async loadData(periodValue = 'all') {
         try {
         
             // 순위표 데이터 로드
@@ -1257,7 +1251,7 @@ filterAndRender(playerName, position) {
                     console.error('순위표 로딩 실패:', error);
                     this.loadSampleData();
                 })
-                .getLeaderboardsData();
+                .getLeaderboardsData(periodValue);
         } catch (error) {
             console.error('데이터 로딩 실패:', error);
             this.loadSampleData();
@@ -1525,7 +1519,7 @@ function loadCompleteRanking(category) {
             console.error('데이터 로딩 실패:', error);
             container.innerHTML = '<p style="text-align: center; color: #dc2626; padding: 20px;">데이터 로딩 중 오류가 발생했습니다.</p>';
         })
-        .getLeaderboardsData(); // 서버에서 전체 데이터 다시 요청
+        .getLeaderboardsData(document.getElementById('periodFilter')?.value || 'all'); // 서버에서 선택 기간 데이터 요청
 }
 
 
