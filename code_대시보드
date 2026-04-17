@@ -14,12 +14,18 @@ function normalizePlayerName(name) {
 
 function isExcludedPlayer(name) {
   const normalized = normalizePlayerName(name);
+  const compact = normalized.replace(/\s+/g, '');
+
+  // "용병", "용병1", "용병 1", "용병01", "용병 01" 형태 제외
+  if (compact === '용병') return true;
+  if (/^용병0*([1-6])$/.test(compact)) return true;
+
   return CONFIG.EXCLUDED_PLAYER_NAMES.includes(normalized);
 }
 
 function filterExcludedPlayers(players) {
   return (players || []).filter(player => {
-    const playerName = normalizePlayerName(player?.name);
+    const playerName = normalizePlayerName(player && player.name);
     return playerName && !isExcludedPlayer(playerName);
   });
 }
