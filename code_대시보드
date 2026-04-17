@@ -4,8 +4,25 @@
 // 설정 상수 추가
 const CONFIG = {
   STATS_SHEET: "선수별능력치",
-  PLAYER_ARCHIVE_SHEET: "기록실_개인기록"
+  PLAYER_ARCHIVE_SHEET: "기록실_개인기록",
+  EXCLUDED_PLAYER_NAMES: ["용병 1", "용병 2", "용병 3", "용병 4", "용병 5", "용병 6"]
 };
+
+function normalizePlayerName(name) {
+  return String(name || '').trim();
+}
+
+function isExcludedPlayer(name) {
+  const normalized = normalizePlayerName(name);
+  return CONFIG.EXCLUDED_PLAYER_NAMES.includes(normalized);
+}
+
+function filterExcludedPlayers(players) {
+  return (players || []).filter(player => {
+    const playerName = normalizePlayerName(player?.name);
+    return playerName && !isExcludedPlayer(playerName);
+  });
+}
 
 function doGet() {
   const currentYear = new Date().getFullYear();
@@ -25,7 +42,7 @@ function getDashboardData(periodValue) {
       const quarterResult = getQuarterlyData(parseInt(year, 10), quarter);
 
       if (quarterResult.success) {
-        return quarterResult.data || [];
+        return filterExcludedPlayers(quarterResult.data || []);
       }
 
       Logger.log('getDashboardData 분기 조회 실패, 전체기간으로 폴백: ' + quarterResult.message);
@@ -74,7 +91,7 @@ function getDashboardData(periodValue) {
       };
     }).filter(player => player.name);
 
-    return players;
+    return filterExcludedPlayers(players);
   } catch (error) {
     Logger.log('getDashboardData 오류: ' + error.toString());
     throw error;
@@ -141,7 +158,7 @@ function getLatestGameData() {
       };
     });
     
-    return players;
+    return filterExcludedPlayers(players);
   } catch (error) {
     Logger.log('getLatestGameData 오류: ' + error.toString());
     throw error;
