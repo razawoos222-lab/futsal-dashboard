@@ -5,6 +5,7 @@
 const CONFIG = {
   STATS_SHEET: "선수별능력치",
   PLAYER_ARCHIVE_SHEET: "기록실_개인기록",
+  COACH_ARCHIVE_SHEET: "기록실_감독기록",
   EXCLUDED_PLAYER_NAMES: ["용병 1", "용병 2", "용병 3", "용병 4", "용병 5", "용병 6"]
 };
 
@@ -215,11 +216,15 @@ function getLeaderboardsData(periodValue) {
   try {
     const selectedPeriod = periodValue || 'all';
     const players = getDashboardData(selectedPeriod);
-    return generateLeaderboards(players || []);
+    const boards = generateLeaderboards(players || []);
+    const coachBoards = getCoachLeaderboardsData(selectedPeriod);
+    return Object.assign({}, boards, coachBoards);
   } catch (error) {
     Logger.log('getLeaderboardsData 오류: ' + error.toString());
     const players = getDashboardData('all');
-    return generateLeaderboards(players || []);
+    const boards = generateLeaderboards(players || []);
+    const coachBoards = getCoachLeaderboardsData('all');
+    return Object.assign({}, boards, coachBoards);
   }
 }
 
@@ -235,6 +240,118 @@ function generateLeaderboards(players) {
     ccp: [...players].sort((a, b) => b.ccp - a.ccp).slice(0, 10),
     winrate: [...players].filter(p => p.games >= 5).sort((a, b) => b.winRate - a.winRate).slice(0, 10),
     points: [...players].sort((a, b) => b.points - a.points).slice(0, 10)
+  };
+}
+
+function quarterKeyFromDate_(dateVal) {
+  const dt = (dateVal instanceof Date) ? dateVal : new Date(dateVal);
+  if (isNaN(dt.getTime())) return null;
+  return dt.getFullYear() + '-Q' + (Math.floor(dt.getMonth() / 3) + 1);
+}
+
+function getCoachArchiveRows_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.COACH_ARCHIVE_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues();
+}
+
+/**
+ * 기록실_감독기록 집계
+ * 헤더: 경기일,감독명,팀,경기수,승,무,패,득점,실점
+ */
+function aggregateCoachStats_(periodValue) {
+  const period = periodValue || 'all';
+  const rows = getCoachArchiveRows_();
+  const by = {};
+
+  rows.forEach(function (row) {
+    const name = row[1] ? String(row[1]).trim() : '';
+    if (!name) return;
+    const q = quarterKeyFromDate_(row[0]);
+    if (period !== 'all' && q !== period) return;
+
+    if (!by[name]) {
+      by[name] = {
+        name: name,
+        sessions: 0,
+        games: 0,
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsFor: 0,
+        goalsAgainst: 0
+      };
+    }
+
+    const s = by[name];
+    s.sessions += 1;
+    s.games += Number(row[3]) || 0;
+    s.wins += Number(row[4]) || 0;
+    s.draws += Number(row[5]) || 0;
+    s.losses += Number(row[6]) || 0;
+    s.goalsFor += Number(row[7]) || 0;
+    s.goalsAgainst += Number(row[8]) || 0;
+  });
+
+  return Object.keys(by).map(function (k) {
+    const s = by[k];
+    const decided = s.wins + s.losses;
+    s.gd = s.goalsFor - s.goalsAgainst;
+    s.points = s.wins * 3 + s.draws;
+    s.winRate = decided > 0 ? (s.wins / decided) : 0;
+    s.goals = s.goalsFor;
+    return s;
+  });
+}
+
+function getCoachDashboardData(periodValue) {
+  try {
+    const list = aggregateCoachStats_(periodValue || 'all');
+    return list.sort(function (a, b) {
+      return (b.winRate - a.winRate) || (b.points - a.points) || (b.gd - a.gd);
+    });
+  } catch (error) {
+    Logger.log('getCoachDashboardData 오류: ' + error.toString());
+    return [];
+  }
+}
+
+function getCoachLeaderboardsData(periodValue) {
+  const list = aggregateCoachStats_(periodValue || 'all');
+
+  function top(sorted) {
+    return sorted.slice(0, 10).map(function (s) {
+      return {
+        name: s.name,
+        winRate: s.winRate,
+        points: s.points,
+        goals: s.goals,
+        goalsFor: s.goalsFor,
+        goalsAgainst: s.goalsAgainst,
+        gd: s.gd,
+        games: s.games,
+        wins: s.wins,
+        draws: s.draws,
+        losses: s.losses,
+        sessions: s.sessions
+      };
+    });
+  }
+
+  return {
+    coachWinrate: top(list.slice().sort(function (a, b) {
+      return (b.winRate - a.winRate) || (b.points - a.points);
+    })),
+    coachPoints: top(list.slice().sort(function (a, b) {
+      return (b.points - a.points) || (b.gd - a.gd);
+    })),
+    coachGd: top(list.slice().sort(function (a, b) {
+      return (b.gd - a.gd) || (b.points - a.points);
+    })),
+    coachGoals: top(list.slice().sort(function (a, b) {
+      return (b.goalsFor - a.goalsFor) || (b.points - a.points);
+    }))
   };
 }
 
