@@ -424,6 +424,30 @@
     margin-bottom: 40px;
 }
 
+
+        .compare-placeholder {
+            max-width: 640px;
+            margin: 40px auto;
+            padding: 28px 24px;
+            text-align: center;
+            background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .compare-placeholder h3 {
+            margin: 0 0 12px;
+            color: #0f172a;
+        }
+        .compare-placeholder p {
+            margin: 8px 0;
+            color: #475569;
+            line-height: 1.5;
+        }
+        .compare-note {
+            margin-top: 16px !important;
+            font-size: 0.9rem;
+            color: #64748b !important;
+        }
 /* 포지션 완전 제거 */
 .leader-position {
     display: none !important;
@@ -683,6 +707,7 @@
         <!-- 탭 네비게이션 -->
         <div class="tabs">
             <button class="tab active" onclick="switchTab('dashboard')">대시보드</button>
+            <button class="tab" onclick="switchTab('coaches')">감독</button>
             <button class="tab" onclick="switchTab('leaderboards')">순위표</button>
             <button class="tab" onclick="switchTab('compare')">선수비교</button>
         </div>
@@ -714,19 +739,8 @@
                     </div>
 
                     <div class="filter-group">
-                        <label for="positionFilter">포지션</label>
-                        <select id="positionFilter">
-                            <option value="all">전체</option>  
-                            <option value="피보">피보</option>
-                            <option value="올라운더">올라운더</option>
-                            <option value="픽소">픽소</option>
-                            <option value="아라">아라</option>
-                        </select>
-                    </div>
-
-                    <div class="filter-group">
                         <label>&nbsp;</label>
-                        <button onclick="Dashboard.applyFilters()">필터 적용</button>
+                        <button onclick="Dashboard.applyFilters()">조회</button>
                     </div>
                 </div>
 
@@ -736,7 +750,6 @@
                         <thead>
                             <tr>
                                 <th onclick="Dashboard.sortTable('name')">이름</th>
-                                <th onclick="Dashboard.sortTable('position')">포지션</th>
                                 <th onclick="Dashboard.sortTable('games')">경기수</th>
                                 <th onclick="Dashboard.sortTable('wins')">승</th>
                                 <th onclick="Dashboard.sortTable('draws')">무</th>
@@ -806,6 +819,46 @@
                 </div>
             </div>
 
+            <!-- 감독 대시보드 탭 -->
+            <div id="coaches" class="tab-content">
+                <div class="period-selector-bar">
+                    <div class="filter-group">
+                        <label for="coachesPeriodFilter">기간</label>
+                        <select id="coachesPeriodFilter"></select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="coachFilter">감독 검색</label>
+                        <input type="text" id="coachFilter" placeholder="감독 이름으로 검색...">
+                    </div>
+                    <div class="filter-group">
+                        <label>&nbsp;</label>
+                        <button onclick="Coaches.applyFilters()">조회</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="coachesTable">
+                        <thead>
+                            <tr>
+                                <th onclick="Coaches.sortTable('name')">감독</th>
+                                <th onclick="Coaches.sortTable('sessions')">세션</th>
+                                <th onclick="Coaches.sortTable('games')">경기수</th>
+                                <th onclick="Coaches.sortTable('wins')">승</th>
+                                <th onclick="Coaches.sortTable('draws')">무</th>
+                                <th onclick="Coaches.sortTable('losses')">패</th>
+                                <th onclick="Coaches.sortTable('goalsFor')">득점</th>
+                                <th onclick="Coaches.sortTable('goalsAgainst')">실점</th>
+                                <th onclick="Coaches.sortTable('gd')">득실</th>
+                                <th onclick="Coaches.sortTable('points')">승점</th>
+                                <th onclick="Coaches.sortTable('winRate')">승률</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coachesTableBody">
+                            <tr><td colspan="11" style="text-align:center;color:#666;">데이터를 불러오는 중...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- 순위표 탭 -->
             <div id="leaderboards" class="tab-content">
     <div class="period-selector-bar">
@@ -815,7 +868,7 @@
         </div>
         <div class="filter-group">
             <label>&nbsp;</label>
-            <button onclick="Leaderboards.applyFilters()">필터 적용</button>
+            <button onclick="Leaderboards.applyFilters()">조회</button>
         </div>
     </div>
 
@@ -866,6 +919,21 @@
             <div class="leader-list" id="points-leaders"></div>
             <button onclick="showCompleteLeaders('points')">Complete Leaders</button>
         </div>
+        <div class="leader-category">
+            <h3>감독승률순위</h3>
+            <div class="leader-list" id="coachWinrate-leaders"></div>
+            <button onclick="showCompleteLeaders('coachWinrate')">Complete Leaders</button>
+        </div>
+        <div class="leader-category">
+            <h3>감독승점순위</h3>
+            <div class="leader-list" id="coachPoints-leaders"></div>
+            <button onclick="showCompleteLeaders('coachPoints')">Complete Leaders</button>
+        </div>
+        <div class="leader-category">
+            <h3>감독득실순위</h3>
+            <div class="leader-list" id="coachGd-leaders"></div>
+            <button onclick="showCompleteLeaders('coachGd')">Complete Leaders</button>
+        </div>
     </div>
 
     <!-- MVP 모달 -->
@@ -897,9 +965,14 @@
     </div>
 </div>
 
-            <!-- 선수비교 탭 -->
+            <!-- 선수비교 탭 (본인 기록 분기 비교 — 목업 확정 후 연결) -->
             <div id="compare" class="tab-content">
-                <div class="loading">선수비교 기능을 준비 중입니다...</div>
+                <div class="compare-placeholder">
+                    <h3>본인 기록 분기 비교</h3>
+                    <p>다른 선수와 비교하지 않고, <strong>본인 기록만</strong> 분기별로 비교합니다.</p>
+                    <p>예: 김기호 — 2026년 1분기 vs 2025년 4분기</p>
+                    <p class="compare-note">구현 전 목업: <code>mockups/player-self-compare-mockup.html</code></p>
+                </div>
             </div>
         </div>
     </div>
@@ -1069,14 +1142,33 @@
                 });
 
                 const leaderboardsPeriodFilter = document.getElementById('leaderboardsPeriodFilter');
-                leaderboardsPeriodFilter.addEventListener('change', () => {
-                    this.onPeriodChange(leaderboardsPeriodFilter.value);
-                });
+                if (leaderboardsPeriodFilter) {
+                    leaderboardsPeriodFilter.addEventListener('change', () => {
+                        this.onPeriodChange(leaderboardsPeriodFilter.value);
+                    });
+                }
+
+                const coachesPeriodFilter = document.getElementById('coachesPeriodFilter');
+                if (coachesPeriodFilter) {
+                    coachesPeriodFilter.addEventListener('change', () => {
+                        this.onPeriodChange(coachesPeriodFilter.value);
+                    });
+                }
 
                 const playerFilter = document.getElementById('playerFilter');
-                playerFilter.addEventListener('input', () => {
-                    this.applyFilters();
-                });
+                if (playerFilter) {
+                    playerFilter.addEventListener('input', () => {
+                        const name = (playerFilter.value || '').toLowerCase();
+                        this.filterAndRender(name);
+                    });
+                }
+
+                const coachFilter = document.getElementById('coachFilter');
+                if (coachFilter) {
+                    coachFilter.addEventListener('input', () => {
+                        Coaches.filterAndRender((coachFilter.value || '').toLowerCase());
+                    });
+                }
             },
 
             onPeriodChange(periodValue) {
@@ -1087,14 +1179,15 @@
             syncPeriodFilters(periodValue) {
                 const periodFilter = document.getElementById('periodFilter');
                 const leaderboardsPeriodFilter = document.getElementById('leaderboardsPeriodFilter');
+                const coachesPeriodFilter = document.getElementById('coachesPeriodFilter');
                 if (periodFilter) periodFilter.value = periodValue;
                 if (leaderboardsPeriodFilter) leaderboardsPeriodFilter.value = periodValue;
+                if (coachesPeriodFilter) coachesPeriodFilter.value = periodValue;
             },
 
                 async applyFilters(periodValue) {
         const selectedPeriod = periodValue || currentPeriod || document.getElementById('periodFilter').value || 'all';
-        const playerName = document.getElementById('playerFilter').value.toLowerCase();
-        const position = document.getElementById('positionFilter').value;
+        const playerName = (document.getElementById('playerFilter')?.value || '').toLowerCase();
 
         currentPeriod = selectedPeriod;
         this.syncPeriodFilters(selectedPeriod);
@@ -1103,8 +1196,9 @@
             google.script.run
                 .withSuccessHandler((data) => {
                     playersData = Array.isArray(data) ? data : [];
-                    this.filterAndRender(playerName, position);
+                    this.filterAndRender(playerName);
                     Leaderboards.loadData(selectedPeriod);
+                    Coaches.loadData(selectedPeriod);
                 })
                 .withFailureHandler((error) => {
                     console.error('데이터 로딩 실패:', error);
@@ -1142,9 +1236,10 @@ async loadPeriodOptions() {
 renderPeriodOptions(options) {
     const dashboardSelect = document.getElementById('periodFilter');
     const leaderboardsSelect = document.getElementById('leaderboardsPeriodFilter');
+    const coachesSelect = document.getElementById('coachesPeriodFilter');
     if (!dashboardSelect || !leaderboardsSelect) return;
 
-    [dashboardSelect, leaderboardsSelect].forEach((select) => {
+    [dashboardSelect, leaderboardsSelect, coachesSelect].filter(Boolean).forEach((select) => {
         select.innerHTML = '';
         options.forEach((opt) => {
             const option = document.createElement('option');
@@ -1166,11 +1261,10 @@ renderPeriodOptions(options) {
     this.applyFilters();
 },
 
-filterAndRender(playerName, position) {
+filterAndRender(playerName) {
     filteredData = playersData.filter(player => {
-        const nameMatch = player.name.toLowerCase().includes(playerName);
-        const positionMatch = position === 'all' || player.position === position;
-        return nameMatch && positionMatch;
+        const name = (player.name || '').toLowerCase();
+        return !playerName || name.includes(playerName);
     });
     
     currentPage = 1;
@@ -1224,14 +1318,13 @@ filterAndRender(playerName, position) {
                 const pageData = filteredData.slice(startIndex, endIndex);
 
                 if (pageData.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="19" style="text-align: center; color: #666;">데이터가 없습니다.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="18" style="text-align: center; color: #666;">데이터가 없습니다.</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = pageData.map(player => `
                     <tr>
                         <td>${player.name}</td>
-                        <td>${player.position}</td>
                         <td>${player.games}</td>
                         <td>${player.wins}</td>
                         <td>${player.draws}</td>
@@ -1336,7 +1429,10 @@ const Leaderboards = {
     },
 
     renderLeaderboards(data) {
-        const categories = ['goals', 'assists', 'attack', 'defenses', 'saves', 'defensePoints', 'ccp', 'winrate', 'points'];
+        const categories = [
+            'goals', 'assists', 'attack', 'defenses', 'saves', 'defensePoints', 'ccp', 'winrate', 'points',
+            'coachWinrate', 'coachPoints', 'coachGd'
+        ];
         
         categories.forEach(category => {
             const leaders = data[category] || [];
@@ -1359,6 +1455,7 @@ const Leaderboards = {
             
             switch(category) {
                 case 'winrate':
+                case 'coachWinrate':
                     statValue = `${(leader.winRate * 100).toFixed(1)}%`;
                     break;
                 case 'attack':
@@ -1366,6 +1463,12 @@ const Leaderboards = {
                     break;
                 case 'defensePoints':
                     statValue = leader.defensePoints;
+                    break;
+                case 'coachPoints':
+                    statValue = leader.points;
+                    break;
+                case 'coachGd':
+                    statValue = (leader.gd > 0 ? '+' : '') + leader.gd;
                     break;
                 default:
                     statValue = leader[category];
@@ -1454,6 +1557,21 @@ const Leaderboards = {
                 {name: '박준석', points: 62},
                 {name: '김수호', points: 44},
                 {name: '최도현', points: 41}
+            ],
+            coachWinrate: [
+                {name: '김기호', winRate: 0.72},
+                {name: '이영민', winRate: 0.65},
+                {name: '박준석', winRate: 0.58}
+            ],
+            coachPoints: [
+                {name: '김기호', points: 24},
+                {name: '이영민', points: 18},
+                {name: '박준석', points: 15}
+            ],
+            coachGd: [
+                {name: '김기호', gd: 8},
+                {name: '이영민', gd: 3},
+                {name: '박준석', gd: -1}
             ]
         };
 
@@ -1537,7 +1655,10 @@ function loadMVPRanking(quarter) {
         defensePoints: '수비포인트 전체 순위',
         ccp: 'CCP 전체 순위',
         winrate: '승률 전체 순위',
-        points: '승점 전체 순위'
+        points: '승점 전체 순위',
+        coachWinrate: '감독 승률 전체 순위',
+        coachPoints: '감독 승점 전체 순위',
+        coachGd: '감독 득실 전체 순위'
     };
 
     document.getElementById('complete-modal-title').textContent = titles[category];
@@ -1567,6 +1688,7 @@ function loadCompleteRanking(category) {
                 
                 switch(category) {
                     case 'winrate':
+                    case 'coachWinrate':
                         statValue = `${(leader.winRate * 100).toFixed(1)}%`;
                         break;
                     case 'attack':
@@ -1574,6 +1696,12 @@ function loadCompleteRanking(category) {
                         break;
                     case 'defensePoints':
                         statValue = leader.defensePoints;
+                        break;
+                    case 'coachPoints':
+                        statValue = leader.points;
+                        break;
+                    case 'coachGd':
+                        statValue = (leader.gd > 0 ? '+' : '') + leader.gd;
                         break;
                     default:
                         statValue = leader[category];
@@ -1594,7 +1722,7 @@ function loadCompleteRanking(category) {
             console.error('데이터 로딩 실패:', error);
             container.innerHTML = '<p style="text-align: center; color: #dc2626; padding: 20px;">데이터 로딩 중 오류가 발생했습니다.</p>';
         })
-        .getLeaderboardsData(currentPeriod || document.getElementById('periodFilter')?.value || 'all'); // 서버에서 선택 기간 데이터 요청
+        .getLeaderboardsData(currentPeriod || document.getElementById('periodFilter')?.value || 'all');
 }
 
 
@@ -1618,9 +1746,117 @@ function loadCompleteRanking(category) {
  
 
         // 페이지 로드 시 초기화
+
+        let coachesData = [];
+        let coachesFiltered = [];
+        let coachesSort = { column: 'winRate', direction: 'desc' };
+
+        const Coaches = {
+            init() {
+                this.loadData(currentPeriod || 'all');
+            },
+
+            applyFilters() {
+                const selectedPeriod = document.getElementById('coachesPeriodFilter')?.value || currentPeriod || 'all';
+                Dashboard.applyFilters(selectedPeriod);
+            },
+
+            loadData(periodValue = 'all') {
+                try {
+                    google.script.run
+                        .withSuccessHandler((data) => {
+                            coachesData = Array.isArray(data) ? data : [];
+                            this.filterAndRender((document.getElementById('coachFilter')?.value || '').toLowerCase());
+                        })
+                        .withFailureHandler((error) => {
+                            console.error('감독 데이터 로딩 실패:', error);
+                            coachesData = this.sampleData();
+                            this.filterAndRender('');
+                        })
+                        .getCoachDashboardData(periodValue);
+                } catch (error) {
+                    console.error('감독 데이터 로딩 실패:', error);
+                    coachesData = this.sampleData();
+                    this.filterAndRender('');
+                }
+            },
+
+            sampleData() {
+                return [
+                    { name: '김기호', sessions: 6, games: 18, wins: 11, draws: 2, losses: 5, goalsFor: 42, goalsAgainst: 28, gd: 14, points: 35, winRate: 0.688 },
+                    { name: '이영민', sessions: 5, games: 15, wins: 8, draws: 3, losses: 4, goalsFor: 30, goalsAgainst: 24, gd: 6, points: 27, winRate: 0.667 },
+                    { name: '박준석', sessions: 4, games: 12, wins: 5, draws: 2, losses: 5, goalsFor: 22, goalsAgainst: 25, gd: -3, points: 17, winRate: 0.500 }
+                ];
+            },
+
+            filterAndRender(nameQuery) {
+                coachesFiltered = coachesData.filter(c => {
+                    const name = (c.name || '').toLowerCase();
+                    return !nameQuery || name.includes(nameQuery);
+                });
+                this.sortTable(coachesSort.column, true);
+            },
+
+            sortTable(column, keepDirection) {
+                if (!keepDirection) {
+                    if (coachesSort.column === column) {
+                        coachesSort.direction = coachesSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        coachesSort.column = column;
+                        coachesSort.direction = column === 'name' ? 'asc' : 'desc';
+                    }
+                }
+
+                coachesFiltered.sort((a, b) => {
+                    let aVal = a[column];
+                    let bVal = b[column];
+                    if (typeof aVal === 'string') {
+                        aVal = aVal.toLowerCase();
+                        bVal = String(bVal || '').toLowerCase();
+                    }
+                    if (coachesSort.direction === 'asc') {
+                        return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+                    }
+                    return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+                });
+                this.renderTable();
+            },
+
+            renderTable() {
+                const tbody = document.getElementById('coachesTableBody');
+                if (!tbody) return;
+                if (!coachesFiltered.length) {
+                    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#666;">데이터가 없습니다.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = coachesFiltered.map(c => `
+                    <tr>
+                        <td>${c.name}</td>
+                        <td>${c.sessions || 0}</td>
+                        <td>${c.games || 0}</td>
+                        <td>${c.wins || 0}</td>
+                        <td>${c.draws || 0}</td>
+                        <td>${c.losses || 0}</td>
+                        <td>${c.goalsFor || 0}</td>
+                        <td>${c.goalsAgainst || 0}</td>
+                        <td>${(c.gd > 0 ? '+' : '') + (c.gd || 0)}</td>
+                        <td>${c.points || 0}</td>
+                        <td>${((c.winRate || 0) * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('');
+            }
+        };
+
+        const Compare = {
+            init() {
+                // 본인 기록 분기 비교는 목업 확정 후 연결
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             Dashboard.init();
             Leaderboards.init();
+            Coaches.init();
             Compare.init();
         });
     </script>
